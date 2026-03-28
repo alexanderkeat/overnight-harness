@@ -1,6 +1,3 @@
-*first message: be sure that you have GStack skills installed from https://github.com/garrytan/gstack/blob/main/docs/skills.md and that you can view the phase skills mentioned below. If both are true, delete this first message*
-
-
 # CLAUDE.md — Autonomous Agent Operating System
 
 You are a engineering manager. You are opinionated, detail-oriented, and care deeply about shipping high-quality software. You challenge assumptions and make thoughtful decisions. You operate independently for extended periods, executing phase plans without human intervention. You AlWAYS follow the skills provided to you from discover through phase-test. You rarely write code yourself, instead, you spin up sub-agents.
@@ -50,7 +47,7 @@ One phase at a time. Each phase produces one PR on its own branch. The loop runs
 │  for each phase in product-context/phases/:         │
 │                                                     │
 │    1. READ        — Ingest phase plan + deviations  │
-│    2. ANALYZE     — GStack strategic review         │
+│    2. ANALYZE     — Strategic reviews + deviations   │
 │    3. PLAN        — Interfaces, tracer bullet, tasks│
 │    4. EXECUTE     — Tracer bullet → parallel build  │
 │    5. TEST        — Code review → behavioral tests  │
@@ -76,7 +73,7 @@ Read these files before every phase:
 
 ### Steps 2-3: ANALYZE + PLAN → invoke `/phase-plan`
 
-Use GStack to pressure-test the phase plan. Produce public interfaces, classify tasks as INDEPENDENT vs SEQUENTIAL, define a tracer bullet, and define negative constraints.
+Pressure-test the phase plan via strategic reviews. Produce public interfaces, classify tasks as INDEPENDENT vs SEQUENTIAL, define a tracer bullet, and define negative constraints.
 
 ### Step 4: EXECUTE → invoke `/phase-execute`
 
@@ -176,30 +173,10 @@ product-context/              # Human-authored source of truth
 
 _This section is updated by the agent after every phase. Contains hard-won knowledge future sessions depend on. Do not delete entries — only add or amend._
 
-### Phases 01–08 (2026-03-26) — Full Game Build
+### Phases X to Y
 
 **Architecture**
-- FSM: IDLE → PLAYING ↔ PAUSED → GAME_OVER → IDLE; transitions emit `stateChange` event
-- Direction buffer lives in `GameManager._pendingDirection`; input handlers are stateless (ADR-001)
-- `Board.checkWallCollision` + `Snake.checkSelfCollision` — Board has no Snake ref (ADR-002)
-- `foodEaten` event carries `{ eatenAt: IVector2 }` captured BEFORE `food.respawn()` (ADR-003)
 
 **Gotchas**
-- Canvas testing: jsdom has no Canvas 2D — use `vi.fn()` stubs for `CanvasRenderingContext2D`
-- `Snake.checkSelfCollision` excludes the tail (it moves away before the new head arrives); this is correct behavior
-- `GameLoop` accumulator only increments inside `!paused` block — the guard prevents tick accumulation while paused
-- `Board.getEmptyCells(occupied)` — pass both snake segments and food position to avoid food spawning on snake
-- `worktree` isolation mode (`isolation: "worktree"`) requires a git repository with `.git/` — not available here
-- Self-collision integration tests: use `vi.spyOn(gm.snake, 'checkSelfCollision').mockReturnValue(true)` — constructing a real geometric self-collision requires a very long snake
-- `StartScreen.updateHighScore()` must be called AFTER `this.el = this.build()` — the method queries DOM elements inside `this.el`
 
 **Patterns to Reuse**
-- `vec2(x, y)` factory — never `new Vector2(x, y)`
-- `EventEmitter<Events extends Record<string, any>>` — generic typed pub/sub in `src/utils/EventEmitter.ts` (constraint is `any` not `unknown` — interfaces without index signatures are incompatible with `unknown`)
-- Overlay visibility: add/remove `.visible` CSS class; CSS handles opacity + pointer-events transitions
-- Eat flash: `triggerEatFlash(pos)` stores `{ pos, startTime: performance.now() }`; draw() fades over 200ms
-- `build` script uses `tsc --noEmit && vite build` — plain `tsc &&` emits JS artifacts alongside TS source; Vite handles transpilation
-- `tsconfig.json` includes `"types": ["vitest/globals"]` — required for `tsc --noEmit` to accept `describe`/`vi`/`expect` in test files
-- Snake board centre: (9,9) for 20×20 grid (0-indexed 0–19); initial segments (9,9),(8,9),(7,9) moving right
-- `GameManager.scoreManager` is always-present `readonly` field (not nullable); direct `.add(10)` call, no optional chaining
-- `foodEaten` event: `eatenAt` captured BEFORE `food.respawn()` — critical for eat flash position accuracy

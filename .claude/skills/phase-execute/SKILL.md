@@ -1,6 +1,6 @@
 ---
 name: phase-execute
-description: "Phase execution skill (Step 4 of the execution loop). Implements the tracer bullet first to prove interfaces connect, then dispatches sub-agents via the Task tool with worktree isolation to build remaining task groups in parallel, runs sequential integration after the parallel wave, then merges worktree branches into the phase branch. Invoke this skill after /phase-plan completes and before /phase-test. Trigger whenever the agent reaches the EXECUTE step of the main loop."
+description: "Phase execution skill (Step 4 of the execution loop). Sub-skills (/review, /investigate) are local autonomized copies. Implements the tracer bullet first to prove interfaces connect, then dispatches sub-agents via the Task tool with worktree isolation to build remaining task groups in parallel, runs sequential integration after the parallel wave, then merges worktree branches into the phase branch. Invoke this skill after /phase-plan completes and before /phase-test. Trigger whenever the agent reaches the EXECUTE step of the main loop."
 ---
 
 # Phase Execution: Tracer Bullet → Parallel Build
@@ -39,7 +39,7 @@ All sub-agents are spawned via the `Task` tool.
 
 4. **Parallelism is bounded.** No more than 4 concurrent Task calls per message.
 
-5. **GStack skills work in sub-agents.** Slash commands (`/review`, `/investigate`, etc.) are available in any Claude Code process.
+5. **Skills work in sub-agents.** Slash commands (`/review`, `/investigate`, etc.) are available in any Claude Code process.
 
 ## Sub-Agent Prompt Template
 
@@ -77,6 +77,25 @@ prompt: |
   ## Negative Constraints
   {INLINE what NOT to do — tests to skip, work to exclude}
 
+  ## Commit Conventions
+  {INLINE from CLAUDE.md — the commit format lines, e.g.:
+  - phase-{N}: {name} — main implementation
+  - phase-{N} review fixes: {specifics}
+  - phase-{N} docs: deviations, status
+  - phase-{N} context: {additions}}
+
+  ## Quality Gates
+  {INLINE from .agent/codebase-profile.md — the ordered command list, e.g. tsc --noEmit, npm run test, npm run build}
+
+  ## Codebase Knowledge
+  {INLINE from CLAUDE.md — the "Codebase Knowledge" section with gotchas, cross-cutting conventions, and module layout from prior phases}
+
+  ## Phase State
+  - Phase: {N}
+  - Branch: agent/phase-{N}-{description}
+  - Prior phases completed: {list from session-state.md}
+  - Deviations affecting this task: {INLINE relevant deviations from prior ledgers}
+
   ## Instructions
   Execute the plan step by step. For each step:
   1. Write the code following existing patterns in the codebase
@@ -84,10 +103,11 @@ prompt: |
   3. Run the tests to verify they pass
   4. Commit with a clear message: "phase-{N}: {what this commit does}"
 
-  If you hit a blocker, STOP. Do not guess. Report back with:
+  If you hit a blocker, report the issue with:
   - What you were trying to do
   - What went wrong
   - Your best theory on the fix
+  The main agent will decide how to proceed.
 
 isolation: "worktree"
 ```

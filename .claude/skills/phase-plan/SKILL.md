@@ -1,17 +1,17 @@
 ---
 name: phase-plan
-description: "Phase planning skill covering analysis and task decomposition (Steps 2-3 of the execution loop). Runs GStack strategic reviews, reviews accumulated deviations from prior phases, produces public interfaces, classifies tasks as INDEPENDENT vs SEQUENTIAL, defines a tracer bullet, sets negative constraints, and dispatches planning sub-agents via the Task tool. Invoke this skill after reading the phase plan (Step 1) and before executing code (Step 4). Trigger whenever the agent reaches the ANALYZE or PLAN step of the main loop."
+description: "Phase planning skill covering analysis and task decomposition (Steps 2-3 of the execution loop). Sub-skills (/plan-eng-review, /plan-design-review, /cso) are local autonomized copies. Runs strategic reviews, reviews accumulated deviations from prior phases, produces public interfaces, classifies tasks as INDEPENDENT vs SEQUENTIAL, defines a tracer bullet, sets negative constraints, and dispatches planning sub-agents via the Task tool. Invoke this skill after reading the phase plan (Step 1) and before executing code (Step 4). Trigger whenever the agent reaches the ANALYZE or PLAN step of the main loop."
 ---
 
 # Phase Planning: Analyze + Decompose
 
 This skill covers Steps 2 (ANALYZE) and 3 (PLAN) of the execution loop. You've already read the phase plan, product context, and prior phase ledgers (including their deviations) in Step 1. Now pressure-test the plan and break it into executable task groups.
 
-## Step 2: Analyze with GStack
+## Step 2: Analyze
 
 ### Review Accumulated Deviations
 
-Before running any GStack reviews, cross-reference the current phase plan against all deviations from prior phases:
+Before running any reviews, cross-reference the current phase plan against all deviations from prior phases:
 - Are any tasks in this phase blocked by a deferred task from an earlier phase?
 - Does this phase depend on a stub that was left in place? If so, is it scoped to fill that stub?
 - Did a prior spec divergence change an assumption this phase builds on?
@@ -19,13 +19,13 @@ Before running any GStack reviews, cross-reference the current phase plan agains
 
 Adjust your understanding of the phase plan based on these findings. If a deviation materially changes the scope, note it — it will go in the PR.
 
-### GStack Reviews
+### Strategic Reviews
 
 - Run `/plan-eng-review` to validate architecture, identify edge cases, and flag technical risks.
-- If the phase involves UI: run `/plan-design-review` to score design dimensions.
-- If the phase touches auth, data storage, or external APIs: run `/cso` for a security review.
+- If the phase involves UI: run `/plan-design-review` to score design dimensions. **Scope: Scores design dimensions of the PLAN before implementation.** This is distinct from `/design-review` (which does visual QA of the live site after implementation, during phase-test).
+- If the phase touches auth, data storage, or external APIs: run `/cso` for a security review. This is the canonical security review — phase-test will only re-run `/cso --diff` if new security-sensitive files are added after planning.
 
-**Decision authority:** You MAY adjust the implementation approach based on these reviews and deviation analysis. You must NOT change the phase's stated goal or acceptance criteria. If the reviews reveal that the phase plan is fundamentally flawed, document this in a `BLOCKED.md` file and stop.
+**Decision authority:** You MAY adjust the implementation approach based on these reviews and deviation analysis. You must NOT change the phase's stated goal or acceptance criteria. If the reviews reveal that the phase plan is fundamentally flawed, document the concerns, make your best judgment on how to proceed, and note the deviation. Only create `BLOCKED.md` if the plan truly cannot be executed.
 
 **Output:** An annotated version of the phase plan with: confirmed scope, technical approach, risks identified, deviations accounted for, and any adjustments you are making (with reasoning).
 
@@ -100,6 +100,9 @@ prompt: |
 
   ## Relevant Deviations from Prior Phases
   {INLINE any deviations that affect this task group}
+
+  ## Codebase Knowledge
+  {INLINE from CLAUDE.md — gotchas and patterns from prior phases, e.g. "never use X pattern in module Y", DPI scaling requirements, etc.}
 
   ## Instructions
   Create a step-by-step implementation plan. For each step, specify:

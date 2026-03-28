@@ -1,6 +1,6 @@
 ---
 name: phase-ship
-description: "Phase shipping skill (Step 7 of the execution loop). Runs quality gates (lint, format, typecheck, test, build), runs final /review and /ship, opens a PR with decision log and test results, and creates ADRs for architectural changes. No phase ships until all quality gates pass. Invoke this skill after tests pass and iteration is complete. Trigger whenever the agent reaches the SHIP step of the main loop."
+description: "Phase shipping skill (Step 7 of the execution loop). Sub-skills (/review, /ship) are local autonomized copies. Runs quality gates (lint, format, typecheck, test, build), runs final /review and /ship, opens a PR with decision log and test results, and creates ADRs for architectural changes. No phase ships until all quality gates pass. Invoke this skill after tests pass and iteration is complete. Trigger whenever the agent reaches the SHIP step of the main loop."
 ---
 
 # Phase Shipping: Quality Gates → PR + Decision Log
@@ -9,16 +9,17 @@ This skill covers Step 7 of the execution loop. Tests pass, issues are resolved.
 
 ## Quality Gates
 
-Before anything else, run every quality gate command from `.agent/codebase-profile.md` (the "Quality Gates" section populated by `/discover`). All must pass. No exceptions.
+Before anything else, run quality gate commands from `.agent/codebase-profile.md` (the "Quality Gates" section populated by `/discover`). All must pass. No exceptions.
 
 ```bash
-# Example quality gates (actual commands come from codebase-profile.md):
+# Quality gates (actual commands come from codebase-profile.md):
 # 1. Lint:       eslint . --max-warnings 0  /  cargo clippy -- -D warnings  /  ruff check .
 # 2. Format:     prettier --check .  /  cargo fmt --check  /  ruff format --check .
 # 3. Typecheck:  tsc --noEmit  /  mypy .  /  pyright
-# 4. Test:       npm test  /  cargo test  /  pytest
-# 5. Build:      npm run build  /  cargo build --release
+# 4. Build:      npm run build  /  cargo build --release
 ```
+
+**Test suite:** If phase-test already ran the full test suite and no files have changed since, skip the test gate here. Re-run only if files were modified after phase-test (e.g., review fixes). Tests are always mandatory when phase-ship is invoked standalone (outside the phase loop).
 
 If any gate fails:
 - Fix the issue.
@@ -33,11 +34,20 @@ If any gate fails:
 
 ## Shipping Protocol
 
-### 1. Final Review
-Run GStack `/review` one final time on all changes.
+## Pre-Ship Checklist (filled in by main agent before invoking this skill)
+- [ ] Review ran during phase-test: {yes/no + commit SHA of review fixes}
+- [ ] Test suite passed during phase-test: {yes/no + timestamp}
+- [ ] Files changed after phase-test: {yes/no — if yes, re-run tests}
+- [ ] CSO ran during phase-plan: {yes/no}
+
+If review already ran AND no files changed since: skip review.
+If tests already passed AND no files changed since: skip test gate (run lint/format/typecheck/build only).
+
+### 1. Final Review (conditional)
+Check the Pre-Ship Checklist. If review already ran during phase-test AND no files changed since that commit: skip review. Otherwise, run `/review` on the full diff now.
 
 ### 2. Push and Open PR
-Run GStack `/ship` to sync, test, and push.
+Run `/ship` to sync, test, and push.
 
 ### 3. PR Template
 

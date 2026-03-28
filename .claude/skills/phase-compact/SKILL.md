@@ -1,6 +1,6 @@
 ---
 name: phase-compact
-description: "Phase compaction skill (Step 8 of the execution loop). Records deviations in the phase ledger, updates session state and codebase profile, appends new gotchas and conventions to CLAUDE.md's Codebase Knowledge section, updates spec docs if implementation diverged, commits doc updates, then runs /compact to free context. Invoke this skill after shipping a phase PR and before starting the next phase. Trigger whenever the agent reaches the COMPACT step of the main loop."
+description: "Phase compaction skill (Step 8 of the execution loop). All referenced sub-skills are local autonomized copies. Records deviations in the phase ledger, updates session state and codebase profile, appends new gotchas and conventions to CLAUDE.md's Codebase Knowledge section, updates spec docs if implementation diverged, commits doc updates, then runs /compact to free context. Invoke this skill after shipping a phase PR and before starting the next phase. Trigger whenever the agent reaches the COMPACT step of the main loop."
 ---
 
 # Phase Compaction: Deviations + State + Context
@@ -97,7 +97,7 @@ Commit: `phase-{N} docs: deviations, status`
 ### 6. Run /compact
 
 ```
-/compact focus on: current session state, established patterns, carry-forward issues, accumulated deviations, and the plan for the next phase. Discard sub-agent reports and test output details.
+/compact focus on: current session state, established patterns, carry-forward issues, accumulated deviations. Discard sub-agent reports and test output details.
 ```
 
 ## Compaction Rules
@@ -106,12 +106,3 @@ Commit: `phase-{N} docs: deviations, status`
 - Phase ledgers are the canonical source for deviations. Read all prior ledgers' Deviations sections when starting a new phase.
 - Session state is updated, not appended. The "Active Architecture" section reflects CURRENT state, not a changelog.
 - The `.agent/` directory is gitignored. These files are working memory, not project artifacts.
-
-## Session Recovery
-
-If a new Claude Code session picks up this project:
-1. Read CLAUDE.md (auto-loaded — includes Codebase Knowledge)
-2. Read `.agent/session-state.md` to understand where things left off
-3. Read all prior `.agent/phase-*-ledger.md` files for accumulated deviations
-4. Read the next phase plan
-5. Proceed from Step 1 (READ)
