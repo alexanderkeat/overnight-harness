@@ -3,14 +3,23 @@ This is an independently operating harness meant to be provided one command, aft
 Required documents:
 
 /product-context #use this naming convention for the folder holding the files
+
   -architecture.md #holds the technical architecture for the entire build
+
   -user-stories.md #holds all of the stories for this particular build, fully written out.
+  
   -build-phases.md #holds all of the phases for development in this run
+  
   -PRD.md #holds the entire PRD for the entire product.
+  
   /UX-UI #optional - use if you have ux/ui structures
+  
   /phases
+  
     -phase-01.md #the particular requirements for that phase. Should include: Title, Status: not started, Goal, Deliverables, Acceptance Criteria, Related User Stories (full copies), Architecture References
+    
     -phase-02.md
+    
     -phase-03.md
 
 
