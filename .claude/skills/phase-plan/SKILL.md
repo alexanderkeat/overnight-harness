@@ -1,6 +1,6 @@
 ---
 name: phase-plan
-description: "Phase planning skill covering analysis and task decomposition (Steps 2-3 of the execution loop). Sub-skills (/plan-eng-review, /plan-design-review, /cso) are local autonomized copies. Runs strategic reviews, reviews accumulated deviations from prior phases, produces public interfaces, classifies tasks as INDEPENDENT vs SEQUENTIAL, defines a tracer bullet, sets negative constraints, and dispatches planning sub-agents via the Task tool. Invoke this skill after reading the phase plan (Step 1) and before executing code (Step 4). Trigger whenever the agent reaches the ANALYZE or PLAN step of the main loop."
+description: "Phase planning skill covering analysis and task decomposition (Steps 2-3 of the execution loop). Sub-skills (/plan-eng-review, /plan-design-review, /cso) are local autonomized copies. Runs strategic reviews, reviews accumulated deviations from prior phases, produces public interfaces, classifies tasks as INDEPENDENT vs SEQUENTIAL, defines a tracer bullet, sets negative constraints, and dispatches planning sub-agents via the Agent tool. Invoke this skill after reading the phase plan (Step 1) and before executing code (Step 4). Trigger whenever the agent reaches the ANALYZE or PLAN step of the main loop."
 ---
 
 # Phase Planning: Analyze + Decompose
@@ -37,9 +37,22 @@ Before decomposing into task groups, produce these four artifacts. Do NOT write 
 Define the public interfaces this phase will create or modify: structs, types, traits, function signatures, API endpoints, database schema changes. These become the contracts that sub-agents code against and that the tracer bullet will verify.
 
 ### 3b. Task Graph with Dependency Classification
-List every task and classify it:
-- **INDEPENDENT** — can run in parallel with other independent tasks (no shared files, interfaces are defined)
-- **SEQUENTIAL** — depends on another task completing first (shares interfaces, data models, or test fixtures)
+
+First, produce a **File Ownership Map** — for every task group, list the files it will write (not just read):
+
+```
+Task Group A: writes [src/auth/mod.rs, src/auth/types.rs]
+Task Group B: writes [src/search/mod.rs, src/search/index.rs]
+Task Group C: writes [src/config.rs]
+```
+
+Then classify each task:
+- **INDEPENDENT** — can run in parallel. **Required:** its write set has zero overlap with all other INDEPENDENT tasks. Interfaces are fully defined before it starts.
+- **SEQUENTIAL** — must run after another task completes. Required when: write sets overlap, the task depends on output from another group, or it shares data models/test fixtures not yet defined.
+
+**The overlap rule is strict.** If two task groups both need to modify the same file, they are SEQUENTIAL — even if the changes seem independent. Parallel worktrees cannot safely merge overlapping file edits.
+
+If a shared file (e.g., a central types file) would be needed by multiple INDEPENDENT groups, resolve it in the tracer bullet step first: extend it once, commit, then let the INDEPENDENT groups work from that committed state.
 
 This classification directly determines what runs in parallel vs. what waits.
 
@@ -69,13 +82,13 @@ After producing the four artifacts above, decompose into task groups and dispatc
 
 ### Sub-Agent Prompt
 
-Before calling Task, you MUST:
+Before calling Agent, you MUST:
 1. Read `.agent/codebase-profile.md` and extract its contents.
 2. Read the relevant product context files and extract the sections pertinent to this task group — not the full spec, only the sections relevant to this group's tasks.
 3. Construct a self-contained prompt that includes all of this content inline.
 
 ```
-# Task tool call for planning sub-agent
+# Agent tool call for planning sub-agent
 
 prompt: |
   You are a planning sub-agent. Your job is to create a detailed

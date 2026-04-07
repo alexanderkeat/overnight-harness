@@ -1,6 +1,6 @@
 ---
 name: phase-execute
-description: "Phase execution skill (Step 4 of the execution loop). Sub-skills (/review, /investigate) are local autonomized copies. Implements the tracer bullet first to prove interfaces connect, then dispatches sub-agents via the Task tool with worktree isolation to build remaining task groups in parallel, runs sequential integration after the parallel wave, then merges worktree branches into the phase branch. Invoke this skill after /phase-plan completes and before /phase-test. Trigger whenever the agent reaches the EXECUTE step of the main loop."
+description: "Phase execution skill (Step 4 of the execution loop). Sub-skills (/review, /investigate) are local autonomized copies. Implements the tracer bullet first to prove interfaces connect, then dispatches sub-agents via the Agent tool with worktree isolation to build remaining task groups in parallel, runs sequential integration after the parallel wave, then merges worktree branches into the phase branch. Invoke this skill after /phase-plan completes and before /phase-test. Trigger whenever the agent reaches the EXECUTE step of the main loop."
 ---
 
 # Phase Execution: Tracer Bullet → Parallel Build
@@ -29,24 +29,24 @@ After the parallel wave completes and merges, implement SEQUENTIAL tasks that de
 
 ## Sub-Agent Rules
 
-All sub-agents are spawned via the `Task` tool.
+All sub-agents are spawned via the **Agent tool**.
 
-1. **Sub-agents are stateless.** Each Task call creates a fresh process. The prompt is its entire world — no shared context, no inherited CLAUDE.md.
+1. **Sub-agents are stateless.** Each Agent call creates a fresh sub-agent with zero prior context. The prompt is its entire world — no shared context, no inherited CLAUDE.md.
 
-2. **You are the context broker.** Before every Task call, read the necessary files and paste their contents directly into the prompt. Give sub-agents only the spec sections relevant to their tasks — not the full spec.
+2. **You are the context broker.** Before every Agent call, read the necessary files and paste their contents directly into the prompt. Give sub-agents only the spec sections relevant to their tasks — not the full spec.
 
 3. **Use `isolation: "worktree"`** for every code-writing sub-agent. This gives each one its own git worktree on a temp branch.
 
-4. **Parallelism is bounded.** No more than 4 concurrent Task calls per message.
+4. **Parallelism is bounded.** No more than 4 concurrent Agent calls in a single message.
 
-5. **Skills work in sub-agents.** Slash commands (`/review`, `/investigate`, etc.) are available in any Claude Code process.
+5. **Never use the Skill tool.** Read skill files directly with the Read tool and follow their instructions inline — the same rule that applies at every nesting level.
 
 ## Sub-Agent Prompt Template
 
-Before calling Task, read `.agent/codebase-profile.md` and the detailed plan for this task group. Read only the relevant spec sections. Construct a self-contained prompt with all content inlined.
+Before calling Agent, read `.agent/codebase-profile.md` and the detailed plan for this task group. Read only the relevant spec sections. Construct a self-contained prompt with all content inlined.
 
 ```
-# Task tool call for execution sub-agent
+# Agent tool call for execution sub-agent
 # Use isolation: "worktree" for parallel execution safety
 
 prompt: |
@@ -109,31 +109,49 @@ prompt: |
   - Your best theory on the fix
   The main agent will decide how to proceed.
 
+  ## CRITICAL: Never Use the Skill Tool
+  Read skill files directly with the Read tool and follow their instructions inline.
+  | When instructions say... | Do this instead |
+  |---|---|
+  | Invoke `/review` | Read `.claude/skills/review/SKILL.md`, follow inline |
+  | Invoke `/investigate` | Read `.claude/skills/investigate/SKILL.md`, follow inline |
+  | Any other sub-skill | Read `.claude/skills/{name}/SKILL.md`, follow inline |
+
 isolation: "worktree"
 ```
 
 ## Concurrency Model
 
-To run sub-agents in parallel, issue multiple Task calls in a single message. Each gets its own worktree.
+To run sub-agents in parallel, dispatch multiple Agent calls in a **single message** with `run_in_background: true`. Each gets its own worktree. Wait for all background agents to complete before proceeding.
 
 ```
-# In a SINGLE message, call Task multiple times:
+# In a SINGLE message, make multiple Agent tool calls with run_in_background: true:
 
-Task(prompt: "...Task Group A...", isolation: "worktree")  ──→ Sub-Agent 1 ─┐
-Task(prompt: "...Task Group B...", isolation: "worktree")  ──→ Sub-Agent 2 ─┤
-                                                                             │
-# Wait for both to complete, then:                                           │
-                                                                             │
-Task(prompt: "...Task Group C...", isolation: "worktree")  ──→ Sub-Agent 3 ─┘
+Agent(prompt: "...Task Group A...", isolation: "worktree", run_in_background: true)  ──→ Sub-Agent 1 ─┐
+Agent(prompt: "...Task Group B...", isolation: "worktree", run_in_background: true)  ──→ Sub-Agent 2 ─┤
+                                                                                                       │
+# You will be notified when each completes. After ALL complete:                                        │
+                                                                                                       │
+Agent(prompt: "...Task Group C...", isolation: "worktree")  ──→ Sub-Agent 3 (sequential, foreground) ─┘
 ```
+
+Sequential SEQUENTIAL tasks run as foreground Agent calls (no `run_in_background`) after the parallel wave merges.
 
 ## Merging Worktree Results
 
 After parallel sub-agents complete, each has committed to its own worktree branch. The main agent must:
 
-1. Check out the phase branch: `agent/phase-{N}-{description}`
-2. Merge each worktree branch sequentially: `git merge {worktree-branch-name}`
-3. If there are merge conflicts, resolve them manually or spin up a sub-agent to resolve.
+1. Check out the phase branch: `agent/{request-name}/phase-{N}-{description}`
+2. Merge worktree branches in dependency order (dependencies first):
+   ```bash
+   git merge --no-edit {worktree-branch-name}
+   ```
+3. **Conflict resolution protocol** — if a merge fails:
+   a. Run `git diff --name-only --diff-filter=U` to list conflicted files
+   b. Run `git merge --abort`
+   c. If conflicts are in simple files (import lists, enum variants, config keys): resolve manually, commit, continue
+   d. If conflicts are in complex logic: re-implement the conflicting task group as a SEQUENTIAL task on the now-merged branch, incorporating prior work. Dispatch a new foreground Agent call for this.
+   e. After 2 failed resolution attempts: write `.agent/phase-{N}-merge-conflict.md` listing the conflicted files and both branch names. Mark DONE_WITH_CONCERNS in the completion report. Do not block — ship what merged cleanly.
 4. Run the test suite after all merges to verify nothing broke during integration.
 
 The merge order matters if task groups have dependencies — merge the dependency first.

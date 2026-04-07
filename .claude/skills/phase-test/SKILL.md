@@ -40,14 +40,14 @@ Run in order:
 
 Testing sub-agents run on the merged phase branch — do NOT use `isolation: "worktree"`. They need to see the integrated state including review fixes.
 
-Before calling Task, gather:
+Before calling Agent, gather:
 - The acceptance criteria from the phase plan
 - The test command from `.agent/codebase-profile.md`
 - The list of changed files: `git diff --name-only main`
 - A summary of what was built
 
 ```
-# Task tool call for testing sub-agent
+# Agent tool call for testing sub-agent
 # Do NOT use isolation: "worktree"
 
 prompt: |
@@ -83,15 +83,21 @@ prompt: |
   ## Deviations This Phase
   {INLINE any deviations discovered during execution — stubs, spec divergences}
 
+  ## CRITICAL: Never Use the Skill Tool
+  Read skill files directly with the Read tool and follow their instructions inline.
+  | When instructions say... | Do this instead |
+  |---|---|
+  | Invoke `/qa` | Read `.claude/skills/qa/SKILL.md`, follow inline |
+  | Invoke `/design-review` | Read `.claude/skills/design-review/SKILL.md`, follow inline |
+  | Invoke `/cso` | Read `.claude/skills/cso/SKILL.md`, follow inline |
+  | Invoke `/review` | Read `.claude/skills/review/SKILL.md`, follow inline |
+
   ## Instructions
   Run the following checks in order:
   1. Execute the full test suite with: {test_command}. Report any failures.
-  2. Run /qa to test user-facing flows in a real browser.
-  3. If UI was changed: run /design-review for visual audit.
-  4. If security-sensitive AND /cso did not already run during phase-plan: run /cso --diff. If /cso already ran, review its findings instead.
-
-  Slash commands (/qa, /design-review, /cso) are available
-  to you directly — just invoke them.
+  2. Read `.claude/skills/qa/SKILL.md` and follow inline to test user-facing flows.
+  3. If UI was changed: read `.claude/skills/design-review/SKILL.md` and follow inline for visual audit.
+  4. If security-sensitive AND /cso did not already run during phase-plan: read `.claude/skills/cso/SKILL.md` and follow inline. If /cso already ran, review its findings instead.
 
   Report back with:
   - PASS/FAIL for each check
