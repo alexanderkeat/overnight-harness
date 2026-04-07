@@ -1,19 +1,17 @@
 ---
 name: phase-compact
-description: "Phase compaction skill (Step 8 of the execution loop). All referenced sub-skills are local autonomized copies. Records deviations in the phase ledger, updates session state and codebase profile, appends new gotchas and conventions to CLAUDE.md's Codebase Knowledge section, updates spec docs if implementation diverged, commits doc updates, then runs /compact to free context. Invoke this skill after shipping a phase PR and before starting the next phase. Trigger whenever the agent reaches the COMPACT step of the main loop."
+description: "Phase compaction — reference documentation for the PERSIST step in the /run orchestrator. Describes the state files written between phases, their formats, and the rules governing session state. In the current architecture, the /run orchestrator handles persistence directly (Phase Step C) using the phase sub-agent's completion report. This file is kept as a reference for the state file formats and compaction rules."
 ---
 
-# Phase Compaction: Deviations + State + Context
+# Phase Compaction: State File Reference
 
-This skill covers Step 8 of the execution loop. You've shipped the phase. Now record what you learned, update all living documents, and free context for the next phase.
+In the current harness architecture, each phase runs in its own sub-agent (dispatched via the Agent tool). The main orchestrator persists results to `.agent/` state files after each sub-agent returns. This document defines the file formats and rules.
 
-**The order matters:** Write to disk FIRST, then run `/compact`. Compaction summarizes your context window. Anything not written to disk may be lost.
+## State Files
 
-## Actions
+### `.agent/phase-{N}-ledger.md`
 
-### 1. Write the Phase Ledger (with Deviations)
-
-Save to `.agent/phase-{N}-ledger.md`. The Deviations section is critical — it is the connective tissue between phases. Future phases will read this.
+The canonical record of what happened in phase N. Future phases read this (especially the Deviations section) to understand constraints and carry-forward items.
 
 ```markdown
 # Phase {N} Ledger
@@ -30,31 +28,26 @@ Save to `.agent/phase-{N}-ledger.md`. The Deviations section is critical — it 
 {One-liner per change, or "None"}
 
 ## Deviations
-Every divergence from the spec. Each entry must include what was specified, what was actually implemented, why, and where deferred work is tracked.
 
 ### Deferred Tasks
-{Work that needs a later phase to exist}
 - {description} — deferred to Phase {X} because {reason}
 
 ### Spec Divergences
-{Implementation discovered the spec was wrong or incomplete}
 - Spec said: {X}. Implemented: {Y}. Reason: {why}. Spec updated: yes/no.
 
 ### Stubs
-{Methods/functions returning empty/default values}
 - {function_name} returns {default} — needs Phase {X} for full implementation
 
 ### Test Deferrals
-{Tests that need cross-phase infrastructure}
 - {test description} — deferred to Phase {X} because {reason}
 
 ## Patterns Established
 {New code patterns, conventions, or utilities introduced that future phases should reuse}
 ```
 
-### 2. Update Session State
+### `.agent/session-state.md`
 
-Update `.agent/session-state.md`:
+Current system state. Updated (not appended) after each phase. The "Active Architecture" section reflects the CURRENT truth, not a changelog.
 
 ```markdown
 # Session State
@@ -66,43 +59,54 @@ Phase {N} — complete
 {One-liner per completed phase with PR link}
 
 ## Active Architecture
-{Current state of the system — updated after each phase, NOT append-only. Keep under 30 lines.}
+{Current state of the system — ≤30 lines}
 
 ## Carry-Forward Issues
 {Open items from previous phases that affect current/future work}
 
 ## Established Patterns
-{Accumulated list of patterns/utilities you've created and should reuse}
+{Accumulated list of patterns/utilities created across all phases}
 ```
 
-### 3. Update Codebase Profile
+### `.agent/codebase-knowledge.md`
 
-If you discovered new patterns, conventions, or tooling during this phase, update `.agent/codebase-profile.md`.
+Accumulated gotchas and conventions. Each phase appends a new section. Sub-agents receive this in their prompt to avoid repeating mistakes.
 
-### 4. Update CLAUDE.md Codebase Knowledge
+```markdown
+# Codebase Knowledge
 
-Append new entries to the "Codebase Knowledge" section at the bottom of CLAUDE.md. This section is always loaded in future sessions. Add:
-- **Gotchas** — hard-won knowledge about the codebase that would trip up a fresh session (e.g., "RwLock upgrade required — never use .lock().unwrap() in the graph module")
-- **Cross-cutting conventions** — error handling patterns, async patterns, ID schemes, serialization approaches that emerged during this phase
-- **Module layout changes** — new directories or modules added
+## Phase {N}: {title}
+### Gotchas
+- {hard-won knowledge that would trip up a fresh session}
 
-Commit: `phase-{N} context: {specific additions}`
+### Conventions
+- {error handling, async, ID, serialization patterns that emerged}
 
-### 5. Update Specs if Implementation Diverged
-
-If implementation proved any spec wrong or incomplete, update the spec to match reality. The code and the spec must agree. Do NOT update phase goals or acceptance criteria — only factual errors in specs (wrong data models, impossible API contracts, missing edge cases).
-
-Commit: `phase-{N} docs: deviations, status`
-
-### 6. Run /compact
-
-```
-/compact focus on: current session state, established patterns, carry-forward issues, accumulated deviations. Discard sub-agent reports and test output details.
+### Module Changes
+- {new directories or modules added}
 ```
 
-## Compaction Rules
+### `.agent/active-request.md`
 
-- The session-state file is authoritative. When starting a new phase, read `session-state.md` + prior phase ledgers (for deviations) + the current phase plan + product-context docs.
-- Phase ledgers are the canonical source for deviations. Read all prior ledgers' Deviations sections when starting a new phase.
-- Session state is updated, not appended. The "Active Architecture" section reflects CURRENT state, not a changelog.
-- The `.agent/` directory is gitignored. These files are working memory, not project artifacts.
+Tracks which request and phase the harness is working on. Used for crash recovery.
+
+```markdown
+# Active Request
+Name: {request-name}
+Path: overnight-harness/harness-context/Outstanding/{request-name}
+Total Phases: {count}
+Current Phase: {N}
+Started: {date}
+```
+
+### `.agent/codebase-profile.md`
+
+Stack, test runner, code style, CI/CD, quality gates, and patterns. Written by `/discover` on first run, updated incrementally as new patterns emerge.
+
+## Rules
+
+- **Session state is authoritative.** When starting a new phase, the sub-agent receives `session-state.md` + prior ledgers + phase plan + product context.
+- **Phase ledgers are the canonical source for deviations.** All prior ledgers' Deviations sections are inlined in the sub-agent prompt.
+- **Session state is updated, not appended.** The "Active Architecture" section reflects CURRENT state after each phase.
+- **The `.agent/` directory is gitignored.** These files are working memory, not project artifacts. Only spec doc updates get committed.
+- **Context isolation is structural.** Each phase sub-agent gets a fresh context window via the Agent tool. No `/clear` or `/compact` needed — sub-agent boundaries ARE the context reset.

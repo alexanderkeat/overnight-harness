@@ -94,7 +94,7 @@ Create the PR with this structure:
 
 ### 4. Architecture Decision Records
 
-If architectural changes were made during this phase, create an ADR in `product-context/decisions/`:
+If architectural changes were made during this phase, create an ADR in `{REQUEST_PATH}decisions/` (where `{REQUEST_PATH}` is the request path injected in your context, e.g. `overnight-harness/harness-context/Outstanding/my-feature/`):
 
 ```markdown
 # ADR-{NNN}: {Title}
